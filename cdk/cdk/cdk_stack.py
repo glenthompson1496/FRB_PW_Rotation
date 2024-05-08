@@ -50,10 +50,9 @@ class CdkStack(Stack):  # type: ignore
             DockerImageFunction: lambda function
         """
         stack_path = os.path.dirname(os.path.realpath(__file__))
-        lambda_path = os.path.join(stack_path, "..", "..", "functions")
-        thick_path = os.path.join(lambda_path, "thick")
-        thin_path = os.path.join(lambda_path, "thin")
-        thin_path_layer = os.path.join(lambda_path, "thin-layer")
+        lambda_path = os.path.join(stack_path, "multi_user_rotation")
+        fn_path = os.path.join(lambda_path, "function")
+        layer_path = os.path.join(lambda_path, "layer")
 
         dlq = Queue(
             self,
@@ -74,30 +73,10 @@ class CdkStack(Stack):  # type: ignore
             ),
         )
 
-        fn_thick = DockerImageFunction(
-            self,
-            "PyOracleConnectionLambdaThick",
-            function_name="py-oracle-connection-example-thick",
-            code=DockerImageCode.from_image_asset(directory=thick_path),
-            description="Example Lambda to illustrate connection to Oracle using Python (thick client)",
-            dead_letter_queue=dlq,
-            environment={
-                "POWERTOOLS_SERVICE_NAME": "connection-example",
-                "POWERTOOLS_METRICS_NAMESPACE": "PyOracleConn",
-                "REGION": self.region,
-                "SECRET_NAME": secret.secret_name,
-            },
-            environment_encryption=kms_key,
-            memory_size=128,
-            tracing=Tracing.ACTIVE,
-            reserved_concurrent_executions=5,
-            timeout=Duration.seconds(45),
-        )
-
-        fn_thin_layer = PythonLayerVersion(
+        fn_layer = PythonLayerVersion(
             self,
             "PyOracleConnectionLambdaThinLayer",
-            entry=thin_path_layer,
+            entry=layer_path,
             compatible_runtimes=[Runtime.PYTHON_3_9],
         )
 
@@ -106,12 +85,12 @@ class CdkStack(Stack):  # type: ignore
             "PyOracleConnectionLambdaThin",
             function_name="py-oracle-connection-example-thin",
             description="Example Lambda to illustrate connection to Oracle using Python (thin client)",
-            entry=thin_path,
+            entry=fn_path,
             runtime=Runtime.PYTHON_3_9,
             index="lambda_handler.py",
             handler="handler",
             dead_letter_queue=dlq,
-            layers=[fn_thin_layer],
+            layers=[fn_layer],
             environment={
                 "POWERTOOLS_SERVICE_NAME": "connection-example",
                 "POWERTOOLS_METRICS_NAMESPACE": "PyOracleConn",
@@ -125,7 +104,7 @@ class CdkStack(Stack):  # type: ignore
             timeout=Duration.seconds(45),
         )
 
-        for fn in [fn_thin, fn_thick]:
+        for fn in [fn_thin]:
             kms_key.grant_decrypt(fn)
             secret.grant_read(fn)
 
